@@ -8,11 +8,13 @@ library(shapefiles)
 library(spam)
 library(fields)
 library(rgdal)
-library(BayesianTools)
+#library(BayesianTools)
 library(data.table)
 library(betapart)
 library(vegan)
 library(car) # allows Anova with type III sum of squares
+
+createPlots <- FALSE
 
 load("support/ThurData.rda")
 
@@ -409,6 +411,32 @@ for (time_id in time_id_vec){
   }
 }
 
+# summary statistics for alpha div (data)
+group.names <- c("Fish","Invert","Bacteria")
+summary.alpha.data <- data.frame(matrix("",3,3),row.names=group.names)
+names(summary.alpha.data) <- time_id_vec
+fit_lm_flag <- function(y,x){
+  lmod <- summary(lm(y ~ x))
+  if (lmod$coefficients[2,1] > 0){
+    if (lmod$coefficients[2,4] < 0.05){
+      flag <- "+"
+    } else{flag <- "(+)"}
+  } else {
+    if (lmod$coefficients[2,4] < 0.05){
+      flag <- "-"
+    } else{flag <- "(-)"}
+  }
+  return(flag)
+}
+
+for (i in 1:3){
+  for (j in 1:3){
+    summary.alpha.data[j, i] <- 
+      fit_lm_flag(beta_temp.data[[time_id_vec[i]]][[group.names[j]]], catch$AG$A[sites$nodeAG[1:73]])
+  }
+}
+
+
 # temporal beta for eDNA data
 beta_temp.data <- vector("list",3)
 names(beta_temp.data) <- c("bact","invert","fish")
@@ -435,11 +463,11 @@ for (time_id in time_id_vec){
   }
 }
 bb <- beta.temp(PA.data$fish$spring,PA.data$fish$summer, index.family="jaccard")
-beta_temp.data$fish$spring_summer <- bb$beta.jac
+beta_temp.data$fish$spring_summer[["jac"]] <- bb$beta.jac; beta_temp.data$fish$spring_summer[["jtu"]] <- bb$beta.jtu
 bb <- beta.temp(PA.data$fish$spring,PA.data$fish$autumn, index.family="jaccard")
-beta_temp.data$fish$spring_autumn <- bb$beta.jac
+beta_temp.data$fish$spring_autumn[["jac"]] <- bb$beta.jac; beta_temp.data$fish$spring_autumn[["jtu"]] <- bb$beta.jtu
 bb <- beta.temp(PA.data$fish$summer,PA.data$fish$autumn, index.family="jaccard")
-beta_temp.data$fish$summer_autumn <- bb$beta.jac
+beta_temp.data$fish$summer_autumn[["jac"]] <- bb$beta.jac; beta_temp.data$fish$summer_autumn[["jtu"]] <- bb$beta.jtu
 
 # invert
 PA.data$invert <- vector("list",3)
@@ -459,11 +487,11 @@ for (time_id in time_id_vec){
   }
 }
 bb <- beta.temp(PA.data$invert$spring,PA.data$invert$summer, index.family="jaccard")
-beta_temp.data$invert$spring_summer <- bb$beta.jac
+beta_temp.data$invert$spring_summer[["jac"]] <- bb$beta.jac; beta_temp.data$invert$spring_summer[["jtu"]] <- bb$beta.jtu
 bb <- beta.temp(PA.data$invert$spring,PA.data$invert$autumn, index.family="jaccard")
-beta_temp.data$invert$spring_autumn <- bb$beta.jac
+beta_temp.data$invert$spring_autumn[["jac"]] <- bb$beta.jac; beta_temp.data$invert$spring_autumn[["jtu"]] <- bb$beta.jtu
 bb <- beta.temp(PA.data$invert$summer,PA.data$invert$autumn, index.family="jaccard")
-beta_temp.data$invert$summer_autumn <- bb$beta.jac
+beta_temp.data$invert$summer_autumn[["jac"]] <- bb$beta.jac; beta_temp.data$invert$summer_autumn[["jtu"]] <- bb$beta.jtu
 
 # bact
 PA.data$bact <- vector("list",3)
@@ -483,12 +511,24 @@ for (time_id in time_id_vec){
   }
 }
 bb <- beta.temp(PA.data$bact$spring,PA.data$bact$summer, index.family="jaccard")
-beta_temp.data$bact$spring_summer <- bb$beta.jac
+beta_temp.data$bact$spring_summer[["jac"]] <- bb$beta.jac; beta_temp.data$bact$spring_summer[["jtu"]] <- bb$beta.jtu
 bb <- beta.temp(PA.data$bact$spring,PA.data$bact$autumn, index.family="jaccard")
-beta_temp.data$bact$spring_autumn <- bb$beta.jac
+beta_temp.data$bact$spring_autumn[["jac"]] <- bb$beta.jac; beta_temp.data$bact$spring_autumn[["jtu"]] <- bb$beta.jtu
 bb <- beta.temp(PA.data$bact$summer,PA.data$bact$autumn, index.family="jaccard")
-beta_temp.data$bact$summer_autumn <- bb$beta.jac
+beta_temp.data$bact$summer_autumn[["jac"]] <- bb$beta.jac; beta_temp.data$bact$summer_autumn[["jtu"]] <- bb$beta.jtu
 
+# summary statistics for beta temp div (data)
+group.names <- c("fish","invert","bact")
+seasons <- c("spring_summer","spring_autumn")
+summary.beta_temp.data <- data.frame(matrix("",3,2),row.names=group.names)
+names(summary.beta_temp.data) <- seasons
+
+for (i in 1:2){
+  for (j in 1:3){
+    summary.beta_temp.data[j, i] <- 
+      fit_lm_flag(beta_temp.data[[group.names[j]]][[seasons[i]]]$jac, catch$AG$A[sites$nodeAG[1:73]])
+  }
+}
 
 # tornado plots for covariates ####
 cat('\n'); cat('covariate plots... \n')
@@ -525,12 +565,15 @@ for (i in 1:length(catch$FD$X)){
   if (!is.na(catch$FD$toSC[i])){Zmat[ind_row,ind_col] <- catch$FD$Z[i]}
 }
 
+if(createPlots){
 png(file="Fig1_relief.png",width=8/2.54, height=10/2.54,units="in",res=600)
 par(mar=c(0,0,0,0))
 image(Xgrid,Ygrid,t(Zmat),col=colorRampPalette(terrain.colors(20),bias=2)(2100),
       breaks=400:2500,xlab = " ", ylab = " ", axes = FALSE, asp = 1)
 dev.off()
+}
 
+if(createPlots){
 pdf(file="Fig1_contour.pdf",width=8/2.54, height=10/2.54)
 par(mar=c(0,0,0,0))
 plot(c(min(catch$FD$X),max(catch$FD$X)), c(min(catch$FD$Y),max(catch$FD$Y)),
@@ -551,71 +594,104 @@ lines(c(714000,714000),c(221000,221600))
 lines(c(715000,715000),c(221000,221600))
 lines(c(716000,716000),c(221000,221600))
 dev.off()
+}
 
+if(createPlots){
 pdf(file="Fig1_colormap.pdf",width=8/2.54, height=10/2.54)
 plot(c(min(catch$FD$X),max(catch$FD$X)), c(min(catch$FD$Y),max(catch$FD$Y)),
      type="n",xlab = " ", ylab = " ", axes = FALSE, asp = 1)
 image.plot(Xgrid,Ygrid,t(Zmat),col=colorRampPalette(terrain.colors(20),bias=2)(2100),
            breaks=400:2500,legend.only=TRUE)
 dev.off()
+}
 
 # Fig. 2 ####
 group.names <- c("bact","invert","fish")
+if(createPlots){
 pdf(file="Fig2_insets.pdf",width=20/2.54,height=15/2.54)
 par(mfrow=c(3,3))
 p1 <- hist(alpha.diversity$spring$Fish,seq(-0.5,6.5,1), plot=F); p1$counts <- p1$counts/sum(p1$counts)
 p2 <- hist(alpha.div.data$spring$Fish,seq(-0.5,6.5,1), plot=F); p2$counts <- p2$counts/sum(p2$counts)
 plot(p1, col=hcl.colors(3,"Blues 3")[2],  ylim=c(0,0.5), ylab="Frequency", xlab="",main="",axes=F); title('Fish')
 plot(p2,col=rgb(0,0,0,0.25),  add=T, main="")
+abline(v=mean(alpha.diversity$spring$Fish),col=hcl.colors(3,"Blues 3")[2])
+abline(v=mean(alpha.div.data$spring$Fish),col=rgb(0,0,0,0.25))
+tt <- t.test(alpha.diversity$spring$Fish, alpha.div.data$spring$Fish); text(5,0.5,sprintf('p = %.2e',tt$p.value))
 axis(1, pos=0); axis(2,pos=-0.5,at=c(0,0.25,0.5))
 p1 <- hist(alpha.diversity$spring$Invert,seq(0,30,3), plot=F); p1$counts <- p1$counts/sum(p1$counts)
 p2 <- hist(alpha.div.data$spring$Invert,seq(0,30,3), plot=F); p2$counts <- p2$counts/sum(p2$counts)
 plot(p1, col=hcl.colors(3,"Greens 3")[2], ylim=c(0,0.5), ylab="", xlab="",main="",axes=F); title('Invertebrates')
 plot(p2,col=rgb(0,0,0,0.25), add=T, main="")
+abline(v=mean(alpha.diversity$spring$Invert),col=hcl.colors(3,"Greens 3")[2])
+abline(v=mean(alpha.div.data$spring$Invert),col=rgb(0,0,0,0.25))
+tt <- t.test(alpha.diversity$spring$Invert, alpha.div.data$spring$Invert); text(25,0.5,sprintf('p = %.2e',tt$p.value))
 axis(1, pos=0); axis(2,pos=0,at=c(0,0.25,0.5))
 p1 <- hist(alpha.diversity$spring$Bacteria,seq(0,120,12), plot=F); p1$counts <- p1$counts/sum(p1$counts)
 p2 <- hist(alpha.div.data$spring$Bacteria,seq(0,120,12), plot=F); p2$counts <- p2$counts/sum(p2$counts)
 plot(p1, col=hcl.colors(3,"Reds 2")[2],  ylim=c(0,0.5), ylab="", xlab="",main="",axes=F); title('Bacteria')
 plot(p2,col=rgb(0,0,0,0.25), add=T, main="")
+abline(v=mean(alpha.diversity$spring$Bacteria),col=hcl.colors(3,"Reds 2")[2])
+abline(v=mean(alpha.div.data$spring$Bacteria),col=rgb(0,0,0,0.25))
+tt <- t.test(alpha.diversity$spring$Bacteria, alpha.div.data$spring$Bacteria); text(100,0.5,sprintf('p = %.2e',tt$p.value))
 axis(1, pos=0); axis(2,pos=0,at=c(0,0.25,0.5))
 
 p1 <- hist(alpha.diversity$summer$Fish,seq(-0.5,6.5,1), plot=F); p1$counts <- p1$counts/sum(p1$counts)
 p2 <- hist(alpha.div.data$summer$Fish,seq(-0.5,6.5,1), plot=F); p2$counts <- p2$counts/sum(p2$counts)
 plot(p1, col=hcl.colors(3,"Blues 3")[2],  ylim=c(0,0.5), ylab="Frequency", xlab="",main="",axes=F); 
 plot(p2,col=rgb(0,0,0,0.25),  add=T, main="")
+abline(v=mean(alpha.diversity$summer$Fish),col=hcl.colors(3,"Blues 3")[2])
+abline(v=mean(alpha.div.data$summer$Fish),col=rgb(0,0,0,0.25))
+tt <- t.test(alpha.diversity$summer$Fish, alpha.div.data$summer$Fish); text(5,0.5,sprintf('p = %.2e',tt$p.value))
 axis(1, pos=0); axis(2,pos=-0.5,at=c(0,0.25,0.5))
 p1 <- hist(alpha.diversity$summer$Invert,seq(0,30,3), plot=F); p1$counts <- p1$counts/sum(p1$counts)
 p2 <- hist(alpha.div.data$summer$Invert,seq(0,30,3), plot=F); p2$counts <- p2$counts/sum(p2$counts)
 plot(p1, col=hcl.colors(3,"Greens 3")[2], ylim=c(0,0.5), ylab="", xlab="",main="",axes=F); 
 plot(p2,col=rgb(0,0,0,0.25), add=T, main="")
+abline(v=mean(alpha.diversity$summer$Invert),col=hcl.colors(3,"Greens 3")[2])
+abline(v=mean(alpha.div.data$summer$Invert),col=rgb(0,0,0,0.25))
+tt <- t.test(alpha.diversity$summer$Invert, alpha.div.data$summer$Invert); text(25,0.5,sprintf('p = %.2e',tt$p.value))
 axis(1, pos=0); axis(2,pos=0,at=c(0,0.25,0.5))
 p1 <- hist(alpha.diversity$summer$Bacteria,seq(0,120,12), plot=F); p1$counts <- p1$counts/sum(p1$counts)
 p2 <- hist(alpha.div.data$summer$Bacteria,seq(0,120,12), plot=F); p2$counts <- p2$counts/sum(p2$counts)
 plot(p1, col=hcl.colors(3,"Reds 2")[2],  ylim=c(0,0.5), ylab="", xlab="",main="",axes=F);
 plot(p2,col=rgb(0,0,0,0.25), add=T, main="")
+abline(v=mean(alpha.diversity$summer$Bacteria),col=hcl.colors(3,"Reds 2")[2])
+abline(v=mean(alpha.div.data$summer$Bacteria),col=rgb(0,0,0,0.25))
+tt <- t.test(alpha.diversity$summer$Bacteria, alpha.div.data$summer$Bacteria); text(100,0.5,sprintf('p = %.2e',tt$p.value))
 axis(1, pos=0); axis(2,pos=0,at=c(0,0.25,0.5))
 
 p1 <- hist(alpha.diversity$autumn$Fish,seq(-0.5,6.5,1), plot=F); p1$counts <- p1$counts/sum(p1$counts)
 p2 <- hist(alpha.div.data$autumn$Fish,seq(-0.5,6.5,1), plot=F); p2$counts <- p2$counts/sum(p2$counts)
 plot(p1, col=hcl.colors(3,"Blues 3")[2],  ylim=c(0,0.5), ylab="Frequency", xlab="",main="",axes=F); 
 plot(p2,col=rgb(0,0,0,0.25),  add=T, main="")
+abline(v=mean(alpha.diversity$autumn$Fish),col=hcl.colors(3,"Blues 3")[2])
+abline(v=mean(alpha.div.data$autumn$Fish),col=rgb(0,0,0,0.25))
+tt <- t.test(alpha.diversity$autumn$Fish, alpha.div.data$autumn$Fish); text(5,0.5,sprintf('p = %.2e',tt$p.value))
 axis(1, pos=0); axis(2,pos=-0.5,at=c(0,0.25,0.5))
 p1 <- hist(alpha.diversity$autumn$Invert,seq(0,30,3), plot=F); p1$counts <- p1$counts/sum(p1$counts)
 p2 <- hist(alpha.div.data$autumn$Invert,seq(0,30,3), plot=F); p2$counts <- p2$counts/sum(p2$counts)
 plot(p1, col=hcl.colors(3,"Greens 3")[2], ylim=c(0,0.5), ylab="", xlab="",main="",axes=F); 
 plot(p2,col=rgb(0,0,0,0.25), add=T, main="")
+abline(v=mean(alpha.diversity$autumn$Invert),col=hcl.colors(3,"Greens 3")[2])
+abline(v=mean(alpha.div.data$autumn$Invert),col=rgb(0,0,0,0.25))
+tt <- t.test(alpha.diversity$autumn$Invert, alpha.div.data$autumn$Invert); text(25,0.5,sprintf('p = %.2e',tt$p.value))
 axis(1, pos=0); axis(2,pos=0,at=c(0,0.25,0.5))
 p1 <- hist(alpha.diversity$autumn$Bacteria,seq(0,120,12), plot=F); p1$counts <- p1$counts/sum(p1$counts)
 p2 <- hist(alpha.div.data$autumn$Bacteria,seq(0,120,12), plot=F); p2$counts <- p2$counts/sum(p2$counts)
 plot(p1, col=hcl.colors(3,"Reds 2")[2],  ylim=c(0,0.5), ylab="", xlab="",main="",axes=F);
 plot(p2,col=rgb(0,0,0,0.25), add=T, main="")
+abline(v=mean(alpha.diversity$autumn$Bacteria),col=hcl.colors(3,"Reds 2")[2])
+abline(v=mean(alpha.div.data$autumn$Bacteria),col=rgb(0,0,0,0.25))
+tt <- t.test(alpha.diversity$autumn$Bacteria, alpha.div.data$autumn$Bacteria); text(100,0.5,sprintf('p = %.2e',tt$p.value))
 axis(1, pos=0); axis(2,pos=0,at=c(0,0.25,0.5))
 dev.off()
+}
 
 vecA <- seq(min(log10(catch$AG$A)), max(log10(catch$AG$A)), length.out=100)
 vecA <- 10^vecA
 summary.alpha <- data.frame(matrix("",3,3),row.names=group.names)
 names(summary.alpha) <- time_id_vec
+if(createPlots){
 pdf(file="Fig2.pdf",width=20/2.54,height=18/2.54)
 par(mfrow=c(3,3))
 plot(catch$AG$A, alpha.diversity$spring$Fish, pch=19, cex=0.5, log="x", xlim=c(1e5,1e9),
@@ -717,9 +793,10 @@ lines(vecA, ss1$coefficients[1,1]+ss1$coefficients[2,1]*vecA, lwd=1)
 text(5e6,110,sprintf('%s;    R^2: %.1e',ll$flag,ss1$r.squared))
 summary.alpha["bact",]$autumn <- ll$flag
 dev.off()
-
+}
 
 # Fig. 3 ####
+if(createPlots){
 pdf(file="Fig3.pdf",width=15/2.54, height=14/2.54)
 par(mfrow=c(3,3),mar=c(0,0,0,0))
 draw_thematic_catch(catch, alpha.diversity$spring$Fish, colLevels = c(0,6,1000), addLegend = F,
@@ -744,12 +821,13 @@ draw_thematic_catch(catch, alpha.diversity$autumn$Bacteria, colLevels = c(0,100,
                     colPalette = hcl.colors(1000,"Reds 2",rev=T), backgroundColor = "#303030"); #title("autumn")
 
 dev.off()
-
+}
 
 # Fig. 4 ####
 
 summary.beta.spat <- data.frame(matrix("",3,3),row.names=group.names)
 names(summary.beta.spat) <- time_id_vec
+if(createPlots){
 pdf(file="Fig4.pdf",width=20/2.54,height=8/2.54)
 par(mfrow=c(1,3))
 for (time in time_id_vec){
@@ -767,8 +845,10 @@ for (time in time_id_vec){
           ylab="Jaccard index"); title(time); abline(v=c(2.5,4.5), col="gray")
 }
 dev.off()
+}
 
 # Fig. 5 ####
+if(createPlots){
 seas.names <- c("spring_summer","summer_autumn","spring_autumn")
 group.names <- c("bact","invert","fish")
 summary.beta.temp <- data.frame(matrix("",3,3),row.names=group.names)
@@ -843,44 +923,66 @@ text(5e6,0.1,sprintf('p: %.1e; - R^2: %.1e',ss1$coefficients[2,4],ss1$r.squared)
 lines(vecA, ss1$coefficients[1,1]+ss1$coefficients[2,1]*vecA, lwd=2)
 summary.beta.temp["bact",]$spring_autumn <- ll$flag
 dev.off()
+}
 
+if(createPlots){
 pdf(file="Fig5_inset.pdf",width=20/2.54,height=10/2.54)
 par(mfrow=c(2,3))
 p1 <- hist(beta_temp$fish$jac$spring_summer,seq(0,1,0.1), plot=F); p1$counts <- p1$counts/sum(p1$counts)
-p2 <- hist(beta_temp.data$fish$spring_summer,seq(0,1,0.1), plot=F); p2$counts <- p2$counts/sum(p2$counts)
+p2 <- hist(beta_temp.data$fish$spring_summer$jac,seq(0,1,0.1), plot=F); p2$counts <- p2$counts/sum(p2$counts)
 plot(p1, col=hcl.colors(3,"Blues 3")[2],  ylim=c(0,0.5), ylab="Frequency", xlab="",main="",axes=F); title('Fish')
+abline(v=mean(beta_temp$fish$jac$spring_summer,na.rm=T),col=hcl.colors(3,"Blues 3")[2])
+abline(v=mean(beta_temp.data$fish$spring_summer$jac,na.rm=T),col=rgb(0,0,0,0.25))
+tt <- t.test(beta_temp$fish$jac$spring_summer, beta_temp.data$fish$spring_summer$jac); text(0.9,0.5,sprintf('p = %.2e',tt$p.value))
 plot(p2,col=rgb(0,0,0,0.25),  add=T, main="")
 axis(1, pos=0); axis(2,pos=0,at=c(0,0.25,0.5))
 p1 <- hist(beta_temp$invert$jac$spring_summer,seq(0,1,0.1), plot=F); p1$counts <- p1$counts/sum(p1$counts)
-p2 <- hist(beta_temp.data$invert$spring_summer,seq(0,1,0.1), plot=F); p2$counts <- p2$counts/sum(p2$counts)
+p2 <- hist(beta_temp.data$invert$spring_summer$jac,seq(0,1,0.1), plot=F); p2$counts <- p2$counts/sum(p2$counts)
 plot(p1, col=hcl.colors(3,"Greens 3")[2], ylim=c(0,0.5), ylab="", xlab="",main="",axes=F); title('Invertebrates')
 plot(p2,col=rgb(0,0,0,0.25), add=T, main="")
+abline(v=mean(beta_temp$invert$jac$spring_summer),col=hcl.colors(3,"Greens 3")[2])
+abline(v=mean(beta_temp.data$invert$spring_summer$jac),col=rgb(0,0,0,0.25))
+tt <- t.test(beta_temp$invert$jac$spring_summer, beta_temp.data$invert$spring_summer$jac); text(0.9,0.5,sprintf('p = %.2e',tt$p.value))
 axis(1, pos=0); axis(2,pos=0,at=c(0,0.25,0.5))
 p1 <- hist(beta_temp$bact$jac$spring_summer,seq(0,1,0.1), plot=F); p1$counts <- p1$counts/sum(p1$counts)
-p2 <- hist(beta_temp.data$bact$spring_summer,seq(0,1,0.1),  plot=F); p2$counts <- p2$counts/sum(p2$counts)
+p2 <- hist(beta_temp.data$bact$spring_summer$jac,seq(0,1,0.1),  plot=F); p2$counts <- p2$counts/sum(p2$counts)
 plot(p1, col=hcl.colors(3,"Reds 2")[2],  ylim=c(0,0.5), ylab="", xlab="",main="",axes=F); title('Bacteria')
 plot(p2,col=rgb(0,0,0,0.25), add=T, main="")
+abline(v=mean(beta_temp$bact$jac$spring_summer),col=hcl.colors(3,"Reds 2")[2])
+abline(v=mean(beta_temp.data$bact$spring_summer$jac),col=rgb(0,0,0,0.25))
+tt <- t.test(beta_temp$bact$jac$spring_summer, beta_temp.data$bact$spring_summer$jac); text(0.9,0.5,sprintf('p = %.2e',tt$p.value))
 axis(1, pos=0); axis(2,pos=0,at=c(0,0.25,0.5))
 
 p1 <- hist(beta_temp$fish$jac$spring_autumn,seq(0,1,0.1),  plot=F); p1$counts <- p1$counts/sum(p1$counts)
-p2 <- hist(beta_temp.data$fish$spring_autumn,seq(0,1,0.1),  plot=F); p2$counts <- p2$counts/sum(p2$counts)
+p2 <- hist(beta_temp.data$fish$spring_autumn$jac,seq(0,1,0.1),  plot=F); p2$counts <- p2$counts/sum(p2$counts)
 plot(p1, col=hcl.colors(3,"Blues 3")[2],  ylim=c(0,0.6), ylab="Frequency", xlab="",main="",axes=F); 
 plot(p2,col=rgb(0,0,0,0.25),  add=T, main="")
+abline(v=mean(beta_temp$fish$jac$spring_autumn,na.rm=T),col=hcl.colors(3,"Blues 3")[2])
+abline(v=mean(beta_temp.data$fish$spring_autumn$jac,na.rm=T),col=rgb(0,0,0,0.25))
+tt <- t.test(beta_temp$fish$jac$spring_autumn, beta_temp.data$fish$spring_autumn$jac); text(0.9,0.5,sprintf('p = %.2e',tt$p.value))
 axis(1, pos=0); axis(2,pos=0,at=c(0,0.3,0.6))
 p1 <- hist(beta_temp$invert$jac$spring_autumn,seq(0,1,0.1), plot=F); p1$counts <- p1$counts/sum(p1$counts)
-p2 <- hist(beta_temp.data$invert$spring_autumn,seq(0,1,0.1), plot=F); p2$counts <- p2$counts/sum(p2$counts)
+p2 <- hist(beta_temp.data$invert$spring_autumn$jac,seq(0,1,0.1), plot=F); p2$counts <- p2$counts/sum(p2$counts)
 plot(p1, col=hcl.colors(3,"Greens 3")[2], ylim=c(0,0.5), ylab="", xlab="",main="",axes=F); 
 plot(p2,col=rgb(0,0,0,0.25), add=T, main="")
+abline(v=mean(beta_temp$invert$jac$spring_autumn),col=hcl.colors(3,"Greens 3")[2])
+abline(v=mean(beta_temp.data$invert$spring_autumn$jac),col=rgb(0,0,0,0.25))
+tt <- t.test(beta_temp$invert$jac$spring_autumn, beta_temp.data$invert$spring_autumn$jac); text(0.9,0.5,sprintf('p = %.2e',tt$p.value))
 axis(1, pos=0); axis(2,pos=0,at=c(0,0.25,0.5))
 p1 <- hist(beta_temp$bact$jac$spring_autumn,seq(0,1,0.1),  plot=F); p1$counts <- p1$counts/sum(p1$counts)
-p2 <- hist(beta_temp.data$bact$spring_autumn,seq(0,1,0.1),  plot=F); p2$counts <- p2$counts/sum(p2$counts)
+p2 <- hist(beta_temp.data$bact$spring_autumn$jac,seq(0,1,0.1),  plot=F); p2$counts <- p2$counts/sum(p2$counts)
 plot(p1, col=hcl.colors(3,"Reds 2")[2],  ylim=c(0,0.5), ylab="", xlab="",main="",axes=F);
 plot(p2,col=rgb(0,0,0,0.25), add=T, main="")
+abline(v=mean(beta_temp$bact$jac$spring_autumn),col=hcl.colors(3,"Reds 2")[2])
+abline(v=mean(beta_temp.data$bact$spring_autumn$jac),col=rgb(0,0,0,0.25))
+tt <- t.test(beta_temp$bact$jac$spring_autumn, beta_temp.data$bact$spring_autumn$jac); text(0.9,0.5,sprintf('p = %.2e',tt$p.value))
 axis(1, pos=0); axis(2,pos=0,at=c(0,0.25,0.5))
 
 dev.off()
+}
 
 # Fig. 6 ####
+if(createPlots){
 pdf(file="Fig6.pdf",width=15/2.54,height=14/2.54)
 par(mfrow=c(3,3),mar=c(0,0,0,0))
 draw_thematic_catch(catch, beta_temp$fish$jac$spring_summer, colLevels = c(0,1,1000),
@@ -896,7 +998,7 @@ draw_thematic_catch(catch, beta_temp$invert$jac$spring_autumn, colLevels = c(0,1
 draw_thematic_catch(catch, beta_temp$bact$jac$spring_autumn, colLevels = c(0,1,1000),
                     colPalette=hcl.colors(1000,"Reds 2",rev=T),nanColor="#999999",addLegend=F)
 dev.off()
-
+}
 
 # Fig. S1 ####
 # re-read data_COI (as Barbus, Gobio, Phoxinus had been removed)
@@ -975,7 +1077,7 @@ for (t in 1:3){
 sumPresence.fish_12S[t] <- suppressWarnings(sumPresence.fish_12S[t] + (max(data_12S$value[which(data_12S$Genus==fish_names[b] & data_12S$time_id==time_id_vec[t])])>0)) 
   }
 }
- 
+if(createPlots){ 
 pdf(file="FigS1.pdf",width=18/2.54, height=12/2.54) 
 par(mfrow=c(2,4))
 barplot(sumReads.fish_12S,ylim=c(0,3e5), col=seas.cols, ylab="No. reads"); title('Fish - 12S')
@@ -987,10 +1089,24 @@ barplot(sumPresence.fish_COI, ylim=c(0,10), col=seas.cols, names.arg=time_id_vec
 barplot(sumPresence.invert, ylim=c(0,80), col=seas.cols, names.arg=time_id_vec);
 barplot(sumPresence.bact, ylim=c(0,250), col=seas.cols, names.arg=time_id_vec); 
 dev.off()
+}
 
+# Fig. S3 ####
+if (createPlots){
+  pdf(file="FigS3.pdf",width=18/2.54,height=7/2.54)
+  par(mfrow=c(1,2))
+  hist(catch$AG$streamOrder[catch$AG$A<=median(catch$AG$A)],seq(0.5,5.5,1),ylim=c(0,1000),
+       xlab="Stream Order",xlim=c(0.5,5.5),xaxt="n",yaxt="n", main='Upstream' )
+  axis(1,pos=0); axis(2,pos=0.5)
+  hist(catch$AG$streamOrder[catch$AG$A>median(catch$AG$A)],seq(0.5,5.5,1),ylim=c(0,1000),
+       xlab="Stream Order",xlim=c(0.5,5.5),xaxt="n",yaxt="n", main='Downstream',ylab="" )
+  axis(1,pos=0); axis(2,pos=0.5)
+  dev.off()
+}
 
-# Fig. S2 ####
-pdf(file="FigS2.pdf",height=22/2.54, width=16/2.54)
+# Fig. S4 ####
+if(createPlots){
+pdf(file="FigS4.pdf",height=22/2.54, width=16/2.54)
 names(Zcovariates) <- c("M-DA","M-SO","M-LS","M-US","M-LE",
                         "G-AL","G-AP","G-LO","G-MO","G-PE","G-SC","G-WA",
                         "L-FO","L-LA","L-OR","L-RO","L-SW","L-UR",
@@ -1018,9 +1134,79 @@ tornado.plot(data, Zcovariates,c(-20,20)); title('Invert - Autumn')
 data <- covariate_significance$autumn[,match(funct.df$Taxa[which(funct.df$description=="Bacteria")],allGenusNames)]
 tornado.plot(data, Zcovariates,c(-40,40)); title('Bacteria - Autumn')
 dev.off()
+}
 
-# Fig. S3 ####
-pdf(file="FigS3.pdf",width=20/2.54,height=14/2.54)
+# Fig. S5 ####
+if(createPlots){
+  pdf(file="FigS5.pdf",width=20/2.54,height=14/2.54)
+  par(mfrow=c(2,3))
+  
+  plot(alpha.diversity$spring$Fish,alpha.diversity$summer$Fish, cex=0.5,
+       xlim=c(0,10),ylim=c(0,10), pch=19, col=hcl.colors(3,"Blues 3")[2], bty="n",xaxt="n",yaxt="n", 
+       xlab="Richness in spring",ylab="Richness in summer")
+  axis(1,pos=0); axis(2,pos=0); title("Fish")
+  lmod <- lm(alpha.diversity$summer$Fish ~ alpha.diversity$spring$Fish)
+  lines(c(0,10), lmod$coefficients[2]*c(0,10) + lmod$coefficients[1], col="black", lwd=2)
+  text(3,10,sprintf("y = %.2f x + %.2f",lmod$coefficients[2],lmod$coefficients[1]))
+  text(2,9,sprintf("p = %.1e",summary(lmod)$coefficients[2,4]))
+  text(2,8,sprintf("R^2 = %.3f",summary(lmod)$r.squared))
+  
+  plot(alpha.diversity$spring$Invert,alpha.diversity$summer$Invert, cex=0.5,
+       xlim=c(0,25),ylim=c(0,25), pch=19, col=hcl.colors(3,"Greens 3")[2], bty="n",xaxt="n",yaxt="n", 
+       xlab="Richness in spring",ylab="Richness in summer")
+  axis(1,pos=0); axis(2,pos=0); title("Invert")
+  lmod <- lm(alpha.diversity$summer$Invert ~ alpha.diversity$spring$Invert)
+  lines(c(0,25), lmod$coefficients[2]*c(0,25) + lmod$coefficients[1], col="black", lwd=2)
+  text(8,25,sprintf("y = %.2f x + %.2f",lmod$coefficients[2],lmod$coefficients[1]))
+  text(7,23.5,sprintf("p = %.1e",summary(lmod)$coefficients[2,4]))
+  text(6,22,sprintf("R^2 = %.3f",summary(lmod)$r.squared))
+  
+  
+  plot(alpha.diversity$spring$Bacteria,alpha.diversity$summer$Bacteria, cex=0.5,
+       xlim=c(0,120),ylim=c(0,120), pch=19, col=hcl.colors(3,"Reds 2")[2], bty="n",xaxt="n",yaxt="n", 
+       xlab="Richness in spring",ylab="Richness in summer")
+  axis(1,pos=0); axis(2,pos=0); title("Bacteria")
+  lmod <- lm(alpha.diversity$summer$Bacteria ~ alpha.diversity$spring$Bacteria)
+  lines(c(0,120), lmod$coefficients[2]*c(0,120) + lmod$coefficients[1], col="black", lwd=2)
+  text(40,120,sprintf("y = %.2f x + %.2f",lmod$coefficients[2],lmod$coefficients[1]))
+  text(30,110,sprintf("p = %.1e",summary(lmod)$coefficients[2,4]))
+  text(30,100,sprintf("R^2 = %.3f",summary(lmod)$r.squared))
+  
+  plot(alpha.diversity$spring$Fish,alpha.diversity$autumn$Fish, cex=0.5,
+       xlim=c(0,10),ylim=c(0,10), pch=19, col=hcl.colors(3,"Blues 3")[2], bty="n",xaxt="n",yaxt="n", 
+       xlab="Richness in spring",ylab="Richness in autumn")
+  axis(1,pos=0); axis(2,pos=0); 
+  lmod <- lm(alpha.diversity$autumn$Fish ~ alpha.diversity$spring$Fish)
+  lines(c(0,10), lmod$coefficients[2]*c(0,10) + lmod$coefficients[1], col="black", lwd=2)
+  text(3,10,sprintf("y = %.2f x + %.2f",lmod$coefficients[2],lmod$coefficients[1]))
+  text(2,9,sprintf("p = %.1e",summary(lmod)$coefficients[2,4]))
+  text(2,8,sprintf("R^2 = %.3f",summary(lmod)$r.squared))
+  
+  plot(alpha.diversity$spring$Invert,alpha.diversity$autumn$Invert, cex=0.5,
+       xlim=c(0,25),ylim=c(0,25), pch=19, col=hcl.colors(3,"Greens 3")[2], bty="n",xaxt="n",yaxt="n", 
+       xlab="Richness in spring",ylab="Richness in autumn")
+  axis(1,pos=0); axis(2,pos=0); 
+  lmod <- lm(alpha.diversity$autumn$Invert ~ alpha.diversity$spring$Invert)
+  lines(c(0,25), lmod$coefficients[2]*c(0,25) + lmod$coefficients[1], col="black", lwd=2)
+  text(8,25,sprintf("y = %.2f x + %.2f",lmod$coefficients[2],lmod$coefficients[1]))
+  text(7,23.5,sprintf("p = %.1e",summary(lmod)$coefficients[2,4]))
+  text(6,22,sprintf("R^2 = %.3f",summary(lmod)$r.squared))
+  
+  plot(alpha.diversity$spring$Bacteria,alpha.diversity$autumn$Bacteria, cex=0.5,
+       xlim=c(0,120),ylim=c(0,120), pch=19, col=hcl.colors(3,"Reds 2")[2], bty="n",xaxt="n",yaxt="n", 
+       xlab="Richness in spring",ylab="Richness in autumn")
+  axis(1,pos=0); axis(2,pos=0); 
+  lmod <- lm(alpha.diversity$autumn$Bacteria ~ alpha.diversity$spring$Bacteria)
+  lines(c(0,120), lmod$coefficients[2]*c(0,120) + lmod$coefficients[1], col="black", lwd=2)
+  text(40,120,sprintf("y = %.2f x + %.2f",lmod$coefficients[2],lmod$coefficients[1]))
+  text(30,110,sprintf("p = %.1e",summary(lmod)$coefficients[2,4]))
+  text(30,100,sprintf("R^2 = %.3f",summary(lmod)$r.squared))
+  dev.off()
+}
+
+# Fig. S6 ####
+if(createPlots){
+pdf(file="FigS6.pdf",width=20/2.54,height=14/2.54)
 par(mfrow=c(2,3))
 plot(alpha.diversity$spring$Bacteria,alpha.diversity$spring$Invert,
      xlim=c(0,120),ylim=c(0,25), pch=19, col=seas.cols[1], cex=0.5, bty="n",xaxt="n",yaxt="n", 
@@ -1080,76 +1266,11 @@ text(10,10,sprintf("y = %.2f x + %.2f",lmod$coefficients[2],lmod$coefficients[1]
 text(5,9.5,sprintf("p = %.1e",summary(lmod)$coefficients[2,4]))
 text(5,9,sprintf("R^2 = %.3f",summary(lmod)$r.squared))
 dev.off()
+}
 
-# Fig. S4 ####
-pdf(file="FigS4.pdf",width=20/2.54,height=14/2.54)
-par(mfrow=c(2,3))
-
-plot(alpha.diversity$spring$Fish,alpha.diversity$summer$Fish, cex=0.5,
-     xlim=c(0,10),ylim=c(0,10), pch=19, col=hcl.colors(3,"Blues 3")[2], bty="n",xaxt="n",yaxt="n", 
-     xlab="Richness in spring",ylab="Richness in summer")
-axis(1,pos=0); axis(2,pos=0); title("Fish")
-lmod <- lm(alpha.diversity$summer$Fish ~ alpha.diversity$spring$Fish)
-lines(c(0,10), lmod$coefficients[2]*c(0,10) + lmod$coefficients[1], col="black", lwd=2)
-text(3,10,sprintf("y = %.2f x + %.2f",lmod$coefficients[2],lmod$coefficients[1]))
-text(2,9,sprintf("p = %.1e",summary(lmod)$coefficients[2,4]))
-text(2,8,sprintf("R^2 = %.3f",summary(lmod)$r.squared))
-
-plot(alpha.diversity$spring$Invert,alpha.diversity$summer$Invert, cex=0.5,
-     xlim=c(0,25),ylim=c(0,25), pch=19, col=hcl.colors(3,"Greens 3")[2], bty="n",xaxt="n",yaxt="n", 
-     xlab="Richness in spring",ylab="Richness in summer")
-axis(1,pos=0); axis(2,pos=0); title("Invert")
-lmod <- lm(alpha.diversity$summer$Invert ~ alpha.diversity$spring$Invert)
-lines(c(0,25), lmod$coefficients[2]*c(0,25) + lmod$coefficients[1], col="black", lwd=2)
-text(8,25,sprintf("y = %.2f x + %.2f",lmod$coefficients[2],lmod$coefficients[1]))
-text(7,23.5,sprintf("p = %.1e",summary(lmod)$coefficients[2,4]))
-text(6,22,sprintf("R^2 = %.3f",summary(lmod)$r.squared))
-
-
-plot(alpha.diversity$spring$Bacteria,alpha.diversity$summer$Bacteria, cex=0.5,
-     xlim=c(0,120),ylim=c(0,120), pch=19, col=hcl.colors(3,"Reds 2")[2], bty="n",xaxt="n",yaxt="n", 
-     xlab="Richness in spring",ylab="Richness in summer")
-axis(1,pos=0); axis(2,pos=0); title("Bacteria")
-lmod <- lm(alpha.diversity$summer$Bacteria ~ alpha.diversity$spring$Bacteria)
-lines(c(0,120), lmod$coefficients[2]*c(0,120) + lmod$coefficients[1], col="black", lwd=2)
-text(40,120,sprintf("y = %.2f x + %.2f",lmod$coefficients[2],lmod$coefficients[1]))
-text(30,110,sprintf("p = %.1e",summary(lmod)$coefficients[2,4]))
-text(30,100,sprintf("R^2 = %.3f",summary(lmod)$r.squared))
-
-plot(alpha.diversity$spring$Fish,alpha.diversity$autumn$Fish, cex=0.5,
-     xlim=c(0,10),ylim=c(0,10), pch=19, col=hcl.colors(3,"Blues 3")[2], bty="n",xaxt="n",yaxt="n", 
-     xlab="Richness in spring",ylab="Richness in autumn")
-axis(1,pos=0); axis(2,pos=0); 
-lmod <- lm(alpha.diversity$autumn$Fish ~ alpha.diversity$spring$Fish)
-lines(c(0,10), lmod$coefficients[2]*c(0,10) + lmod$coefficients[1], col="black", lwd=2)
-text(3,10,sprintf("y = %.2f x + %.2f",lmod$coefficients[2],lmod$coefficients[1]))
-text(2,9,sprintf("p = %.1e",summary(lmod)$coefficients[2,4]))
-text(2,8,sprintf("R^2 = %.3f",summary(lmod)$r.squared))
-
-plot(alpha.diversity$spring$Invert,alpha.diversity$autumn$Invert, cex=0.5,
-     xlim=c(0,25),ylim=c(0,25), pch=19, col=hcl.colors(3,"Greens 3")[2], bty="n",xaxt="n",yaxt="n", 
-     xlab="Richness in spring",ylab="Richness in autumn")
-axis(1,pos=0); axis(2,pos=0); 
-lmod <- lm(alpha.diversity$autumn$Invert ~ alpha.diversity$spring$Invert)
-lines(c(0,25), lmod$coefficients[2]*c(0,25) + lmod$coefficients[1], col="black", lwd=2)
-text(8,25,sprintf("y = %.2f x + %.2f",lmod$coefficients[2],lmod$coefficients[1]))
-text(7,23.5,sprintf("p = %.1e",summary(lmod)$coefficients[2,4]))
-text(6,22,sprintf("R^2 = %.3f",summary(lmod)$r.squared))
-
-plot(alpha.diversity$spring$Bacteria,alpha.diversity$autumn$Bacteria, cex=0.5,
-     xlim=c(0,120),ylim=c(0,120), pch=19, col=hcl.colors(3,"Reds 2")[2], bty="n",xaxt="n",yaxt="n", 
-     xlab="Richness in spring",ylab="Richness in autumn")
-axis(1,pos=0); axis(2,pos=0); 
-lmod <- lm(alpha.diversity$autumn$Bacteria ~ alpha.diversity$spring$Bacteria)
-lines(c(0,120), lmod$coefficients[2]*c(0,120) + lmod$coefficients[1], col="black", lwd=2)
-text(40,120,sprintf("y = %.2f x + %.2f",lmod$coefficients[2],lmod$coefficients[1]))
-text(30,110,sprintf("p = %.1e",summary(lmod)$coefficients[2,4]))
-text(30,100,sprintf("R^2 = %.3f",summary(lmod)$r.squared))
-
-dev.off()
-
-# Fig. S5 ####
-pdf(file="FigS5.pdf",width=18/2.54,height=10/2.54)
+# Fig. S7 ####
+if(createPlots){
+pdf(file="FigS7.pdf",width=18/2.54,height=10/2.54)
 par(mfrow=c(1,2))
 plot((1:length(fish_names))/length(fish_names),sort(colSums(PA_matrix$spring[,fish_names]),decreasing=T)/catch$AG$nNodes, 
      type="l", ylim=c(0,1), xlim=c(0,1),xaxt="n",yaxt="n",bty="n",
@@ -1191,9 +1312,11 @@ lines((1:length(bacteria_names))/length(bacteria_names),
                       PA_matrix$autumn[,bacteria_names])==3),decreasing = T)/catch$AG$nNodes,
       col=hcl.colors(3,"Reds 2")[2])
 dev.off()
+}
 
-# Fig. S6 ####
-pdf(file="FigS6.pdf",width=18/2.54, height=21/2.54) 
+# Fig. S8 ####
+if (createPlots){
+pdf(file="FigS8.pdf",width=18/2.54, height=21/2.54) 
 par(mfrow=c(3,3), mai=c(0,0,0,0))
 draw_thematic_catch(catch, PA_matrix$spring$Gobio, discreteLevels = T, colPalette = c('white','red')); title('Spring')
 draw_thematic_catch(catch, PA_matrix$summer$Gobio, discreteLevels = T, colPalette = c('white','red')); title('Summer')
@@ -1205,7 +1328,9 @@ draw_thematic_catch(catch, PA_matrix$spring$Salmo, discreteLevels = T, colPalett
 draw_thematic_catch(catch, PA_matrix$summer$Salmo, discreteLevels = T, colPalette = c('white','red')); 
 draw_thematic_catch(catch, PA_matrix$autumn$Salmo, discreteLevels = T, colPalette = c('white','red')); 
 dev.off()
+}
 
+# Tables S1 & S2 ####
 betaspat_temp <- data.frame(matrix(0,3,3), row.names=c('Fish','Invert','Bacteria'))
 names(betaspat_temp) <- time_id_vec
 for (time in time_id_vec){
@@ -1239,16 +1364,7 @@ for (time in names(betatemp_mean)){
 }
 
 
-# Fig. S7 ####
-pdf(file="FigS7.pdf",width=18/2.54,height=7/2.54)
-par(mfrow=c(1,2))
-hist(catch$AG$streamOrder[catch$AG$A<=median(catch$AG$A)],seq(0.5,5.5,1),ylim=c(0,1000),
-     xlab="Stream Order",xlim=c(0.5,5.5),xaxt="n",yaxt="n", main='Upstream' )
-axis(1,pos=0); axis(2,pos=0.5)
-hist(catch$AG$streamOrder[catch$AG$A>median(catch$AG$A)],seq(0.5,5.5,1),ylim=c(0,1000),
-     xlab="Stream Order",xlim=c(0.5,5.5),xaxt="n",yaxt="n", main='Downstream',ylab="" )
-axis(1,pos=0); axis(2,pos=0.5)
-dev.off()
+
 
 
 
